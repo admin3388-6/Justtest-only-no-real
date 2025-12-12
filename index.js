@@ -8,8 +8,8 @@ const BOT_USERNAMES = [
     'Nexus_One', 'Raid_Zero', 'Morpheus_X', 'Sky_Walker', 'Ghost_Rider'
 ]; 
 
-const SERVER_HOST = 'skydata.aternos.me';
-const SERVER_PORT = 28068;
+const SERVER_HOST = 'jasonduck461.aternos.me';
+const SERVER_PORT = 51588;
 const SERVER_VERSION = '1.19.4'; 
 const SWITCH_DELAY = 30000; // 30 ثانية انتظار قبل محاولة البوت التالي
 const COMBAT_RANGE = 15; // نطاق الهجوم
