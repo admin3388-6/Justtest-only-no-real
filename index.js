@@ -1,25 +1,40 @@
-// index.js (النسخة المُعدلة - 100 بوت متزامن)
+// index.js (النسخة النهائية - 100 بوت متزامن، تحركات، قتال، ودردشة كل 4 ثواني)
 const mineflayer = require('mineflayer');
 const { Vec3 } = require('vec3'); 
 
 // === 1. إعدادات الخادم والاتصال (مُعدلة) ===
-const SERVER_HOST = 'joinmc.link'; // IP الجديد
+const SERVER_HOST = 'beginning-margaret.gl.joinmc.link'; // IP الجديد
 const SERVER_PORT = 4752; // البورت الجديد
 const SERVER_VERSION = '1.19.4'; 
 const COMBAT_RANGE = 15; // نطاق الهجوم
 const STUCK_THRESHOLD_SECONDS = 30; // مهلة التعليق
 const BOT_COUNT = 100; // العدد المطلوب من البوتات
+const CHAT_INTERVAL_MS = 4000; // **>> فاصل الدردشة الجديد: 4 ثواني <<**
 
-// === 2. توليد أسماء المستخدمين (مُعدلة) ===
+// === 2. توليد أسماء المستخدمين والرسائل العشوائية ===
 const BOT_USERNAMES = [];
 for (let i = 1; i <= BOT_COUNT; i++) {
     BOT_USERNAMES.push(`Anonymous${i}`);
 }
 
+// قائمة الرسائل العشوائية المقبولة
+const RANDOM_MESSAGES = [
+    "Anonymous group Log in", 
+    "Counter initiated", 
+    "It was identified", 
+    "Work in progress", 
+    "Loading new parameters", 
+    "hacking neighbor",
+    "System online",
+    "Checking server status",
+    "Starting sequence 01",
+    "Bot detected"
+];
+
 const activeBots = {}; // كائن لتخزين البوتات النشطة، والمؤقتات الخاصة بها
 const movementControls = ['forward', 'back', 'left', 'right', 'jump', 'sprint'];
 
-// --- دوال التحسينات البشرية والقتال (مُعدلة لتقبل كائن البوت) ---
+// --- دوال التحسينات البشرية والقتال ---
 
 async function equipBestWeapon(bot) {
     const sword = bot.inventory.items().find(item => item.name.includes('sword'));
@@ -32,7 +47,7 @@ async function equipBestWeapon(bot) {
 
 function randomAFKLoop(bot) {
     if (!bot || !bot.entity || !activeBots[bot.username]) return;
-
+    
     // مسح الحركة السابقة
     for (const control of movementControls) {
         bot.setControlState(control, false);
@@ -113,7 +128,7 @@ async function lookForMobsAndAttack(bot) {
     }
 }
 
-// دالة التحقق من التعليق والعودة إلى نقطة البداية (مُحدثة لتقبل كائن البوت)
+// دالة التحقق من التعليق والعودة إلى نقطة البداية
 function stuckDetection(bot) {
     if (!bot || !bot.entity || !activeBots[bot.username] || !activeBots[bot.username].lastPosition) return;
     
@@ -157,8 +172,22 @@ function stuckDetection(bot) {
     botData.lastPosition = bot.entity.position.clone();
 }
 
+// دالة إرسال رسالة عشوائية
+function sendRandomChat(bot) {
+    if (!bot || !bot.entity) return;
 
-// --- دوال الاتصال والتشغيل الجماعي (مُعدلة بالكامل) ---
+    // اختيار رسالة عشوائية من القائمة
+    const randomMessage = RANDOM_MESSAGES[Math.floor(Math.random() * RANDOM_MESSAGES.length)];
+
+    // إضافة اسم البوت إلى الرسالة
+    const fullMessage = `[${bot.username}]: ${randomMessage}`; 
+    
+    // إرسال الرسالة
+    bot.chat(fullMessage);
+    console.log(`[${bot.username}] 💬 Sent Chat: ${fullMessage}`);
+}
+
+// --- دوال الاتصال والتشغيل الجماعي ---
 
 function startBotRoutines(bot) {
     console.log(`[${bot.username}] ✅ Bot spawned. Starting Advanced Routines.`);
@@ -169,14 +198,18 @@ function startBotRoutines(bot) {
     // 2. بدء روتين الحركة العشوائية (AFK)
     randomAFKLoop(bot);
     
-    // 3. بدء روتين البحث عن الوحوش والهجوم (يفحص كل 500ms)
+    // 3. بدء روتين البحث عن الوحوش والهجوم
     activeBots[bot.username].combatInterval = setInterval(() => lookForMobsAndAttack(bot), 500); 
 
-    // 4. بدء روتين حركة الرأس (يفحص كل 500ms)
+    // 4. بدء روتين حركة الرأس
     activeBots[bot.username].headLookInterval = setInterval(() => randomHeadLook(bot), 500);
     
-    // 5. فحص التعليق (يفحص كل 5 ثوانٍ)
+    // 5. فحص التعليق
     activeBots[bot.username].stuckCheckInterval = setInterval(() => stuckDetection(bot), 5000); 
+    
+    // 6. بدء روتين الدردشة العشوائية (كل 4 ثواني)
+    sendRandomChat(bot);
+    activeBots[bot.username].chatInterval = setInterval(() => sendRandomChat(bot), CHAT_INTERVAL_MS);
 }
 
 function cleanupBot(username) {
@@ -187,6 +220,7 @@ function cleanupBot(username) {
         clearInterval(botData.combatInterval);
         clearInterval(botData.headLookInterval);
         clearInterval(botData.stuckCheckInterval);
+        clearInterval(botData.chatInterval); 
         delete activeBots[username];
         console.log(`[${username}] Cleaned up and removed from active list.`);
     }
@@ -212,6 +246,7 @@ function createBot(username) {
         combatInterval: null,
         headLookInterval: null,
         stuckCheckInterval: null,
+        chatInterval: null, 
         lastPosition: null,
     };
 
@@ -222,13 +257,11 @@ function createBot(username) {
     bot.on('spawn', () => {
         startBotRoutines(bot);
     });
-    
-    // --- معالجة أخطاء إعادة الاتصال (سيتم إعادة تشغيله بعد الفصل) ---
-    
+
     const reconnectBot = (reason) => {
         console.log(`[${username}] 🚨 Disconnected Reason: ${reason}. Attempting to reconnect.`);
-        cleanupBot(username); // مسح المؤقتات وإزالة البوت القديم
-        setTimeout(() => createBot(username), 5000); // إعادة محاولة الاتصال بعد 5 ثوانٍ
+        cleanupBot(username); 
+        setTimeout(() => createBot(username), 5000); 
     };
 
     bot.on('kicked', (reason) => {
