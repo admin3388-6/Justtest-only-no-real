@@ -1,29 +1,25 @@
-// index.js (النسخة النهائية - التحركات البشرية والتبديل والقتال)
+// index.js (النسخة المُعدلة - 100 بوت متزامن)
 const mineflayer = require('mineflayer');
 const { Vec3 } = require('vec3'); 
 
-// === إعدادات البوتات والاتصال ===
-const BOT_USERNAMES = [
-    'Player_Alpha', 'Agent_Beta', 'Unit_Gama', 'Spectr_Delta', 'Echo_Bot', 
-    'Nexus_One', 'Raid_Zero', 'Morpheus_X', 'Sky_Walker', 'Ghost_Rider'
-]; 
-
-const SERVER_HOST = 'jasonduck461.aternos.me';
-const SERVER_PORT = 51588;
+// === 1. إعدادات الخادم والاتصال (مُعدلة) ===
+const SERVER_HOST = 'joinmc.link'; // IP الجديد
+const SERVER_PORT = 4752; // البورت الجديد
 const SERVER_VERSION = '1.19.4'; 
-const SWITCH_DELAY = 30000; // 30 ثانية انتظار قبل محاولة البوت التالي
 const COMBAT_RANGE = 15; // نطاق الهجوم
-const STUCK_THRESHOLD_SECONDS = 30; // **>> مهلة التعليق الجديدة <<**
+const STUCK_THRESHOLD_SECONDS = 30; // مهلة التعليق
+const BOT_COUNT = 100; // العدد المطلوب من البوتات
 
-let currentBotIndex = 0; 
-let currentBot = null; 
-let afkLoopTimeout = null; 
-let stuckCheckInterval = null; 
-let lastPosition = null; 
+// === 2. توليد أسماء المستخدمين (مُعدلة) ===
+const BOT_USERNAMES = [];
+for (let i = 1; i <= BOT_COUNT; i++) {
+    BOT_USERNAMES.push(`Anonymous${i}`);
+}
 
+const activeBots = {}; // كائن لتخزين البوتات النشطة، والمؤقتات الخاصة بها
 const movementControls = ['forward', 'back', 'left', 'right', 'jump', 'sprint'];
 
-// --- دوال التحسينات البشرية والقتال ---
+// --- دوال التحسينات البشرية والقتال (مُعدلة لتقبل كائن البوت) ---
 
 async function equipBestWeapon(bot) {
     const sword = bot.inventory.items().find(item => item.name.includes('sword'));
@@ -35,21 +31,23 @@ async function equipBestWeapon(bot) {
 }
 
 function randomAFKLoop(bot) {
-    if (!bot || !bot.entity) return;
-    
+    if (!bot || !bot.entity || !activeBots[bot.username]) return;
+
+    // مسح الحركة السابقة
     for (const control of movementControls) {
         bot.setControlState(control, false);
     }
     
+    // إذا كان هناك قتال، لا تبدأ حلقة AFK
     if (bot.nearestEntity(entity => entity.type === 'mob' && bot.entity.position.distanceTo(entity.position) <= COMBAT_RANGE)) {
-        clearTimeout(afkLoopTimeout); 
+        clearTimeout(activeBots[bot.username].afkLoopTimeout); 
         return; 
     }
 
     const randomControl = movementControls[Math.floor(Math.random() * movementControls.length)];
     let movementDuration = Math.random() * 5000 + 1000; 
 
-    console.log(`AFK: Moving ${randomControl} for ${Math.round(movementDuration / 1000)}s. Sprinting/Jumping.`);
+    console.log(`[${bot.username}] AFK: Moving ${randomControl} for ${Math.round(movementDuration / 1000)}s. Sprinting/Jumping.`);
     
     bot.setControlState(randomControl, true);
     bot.setControlState('sprint', true);
@@ -58,10 +56,11 @@ function randomAFKLoop(bot) {
     if (Math.random() < 0.2) {
         movementDuration = 1000; 
         bot.look(bot.entity.yaw + Math.PI * 2, bot.entity.pitch, true);
-        console.log("AFK: Performing 360-degree spin.");
+        console.log(`[${bot.username}] AFK: Performing 360-degree spin.`);
     }
     
-    afkLoopTimeout = setTimeout(() => {
+    // تخزين مؤقت AFK في الكائن الخاص بالبوت
+    activeBots[bot.username].afkLoopTimeout = setTimeout(() => {
         for (const control of movementControls) {
             bot.setControlState(control, false);
         }
@@ -79,7 +78,7 @@ function randomHeadLook(bot) {
 }
 
 async function lookForMobsAndAttack(bot) {
-    if (!bot || !bot.entity) return;
+    if (!bot || !bot.entity || !activeBots[bot.username]) return;
     
     const filter = entity => (
         entity.type === 'mob' && 
@@ -91,12 +90,13 @@ async function lookForMobsAndAttack(bot) {
     if (target) {
         await equipBestWeapon(bot);
 
+        // إيقاف حركة AFK
         for (const control of movementControls) {
             bot.setControlState(control, false);
         }
-        clearTimeout(afkLoopTimeout);
+        clearTimeout(activeBots[bot.username].afkLoopTimeout);
         
-        console.log(`⚔️ COMBAT PRIORITY: Engaging ${target.name} (Distance: ${bot.entity.position.distanceTo(target.position).toFixed(1)} blocks).`);
+        console.log(`[${bot.username}] ⚔️ COMBAT PRIORITY: Engaging ${target.name} (Distance: ${bot.entity.position.distanceTo(target.position).toFixed(1)} blocks).`);
         
         bot.lookAt(target.position.offset(0, target.height, 0), true, () => {
              bot.attack(target, true); 
@@ -108,61 +108,92 @@ async function lookForMobsAndAttack(bot) {
              }
         });
         
-    } else if (!afkLoopTimeout) {
+    } else if (!activeBots[bot.username].afkLoopTimeout) {
          randomAFKLoop(bot);
     }
 }
 
-// 5. دالة التحقق من التعليق والعودة إلى نقطة البداية (مُحدثة)
+// دالة التحقق من التعليق والعودة إلى نقطة البداية (مُحدثة لتقبل كائن البوت)
 function stuckDetection(bot) {
-    if (!bot || !bot.entity || !lastPosition) return;
+    if (!bot || !bot.entity || !activeBots[bot.username] || !activeBots[bot.username].lastPosition) return;
+    
+    const botData = activeBots[bot.username];
 
     // 1. التحقق مما إذا كان البوت يحاول التحرك حالياً
     const isMoving = movementControls.some(control => bot.getControlState(control));
 
     // 2. التحقق من التعليق: يحاول التحرك ولكن لم يتغير موقعه
-    if (isMoving && bot.entity.position.distanceTo(lastPosition) < 0.1) {
+    if (isMoving && bot.entity.position.distanceTo(botData.lastPosition) < 0.1) {
         
-        if (stuckCheckInterval === null) {
+        if (botData.stuckCheckTimeout === null) {
             // بدأ التعليق، نبدأ المؤقت لـ 30 ثانية
-            console.log(`[Stuck Check] Started ${STUCK_THRESHOLD_SECONDS}s timer.`);
-            stuckCheckInterval = setTimeout(() => {
+            console.log(`[${bot.username}] [Stuck Check] Started ${STUCK_THRESHOLD_SECONDS}s timer.`);
+            botData.stuckCheckTimeout = setTimeout(() => {
                 
                 // بعد انتهاء 30 ثانية، نتحقق مرة أخيرة
-                if (bot.entity.position.distanceTo(lastPosition) < 0.1) {
-                    console.log(`⚠️ STUCK DETECTED! No movement for ${STUCK_THRESHOLD_SECONDS}s. Teleporting to spawn.`);
+                if (bot.entity.position.distanceTo(botData.lastPosition) < 0.1) {
+                    console.log(`[${bot.username}] ⚠️ STUCK DETECTED! No movement for ${STUCK_THRESHOLD_SECONDS}s. Teleporting to spawn.`);
                     
                     for (const control of movementControls) {
                         bot.setControlState(control, false);
                     }
                     bot.chat('/spawn'); // أمر الاستعادة
                 } else {
-                    console.log("[Stuck Check] Timer expired, but bot moved just in time.");
+                    console.log(`[${bot.username}] [Stuck Check] Timer expired, but bot moved just in time.`);
                 }
-
-                // مسح المؤقت سواء نجح أو فشل
-                stuckCheckInterval = null; 
+                botData.stuckCheckTimeout = null; 
             }, STUCK_THRESHOLD_SECONDS * 1000); 
 
         }
     } else {
         // إذا تحرك البوت أو لم يكن يحاول التحرك، أعد ضبط المؤقت (إذا كان قيد التشغيل)
-        if (stuckCheckInterval) {
-            console.log("[Stuck Check] Movement detected, resetting timer.");
-            clearTimeout(stuckCheckInterval);
-            stuckCheckInterval = null;
+        if (botData.stuckCheckTimeout) {
+            console.log(`[${bot.username}] [Stuck Check] Movement detected, resetting timer.`);
+            clearTimeout(botData.stuckCheckTimeout);
+            botData.stuckCheckTimeout = null;
         }
     }
     // 3. تحديث آخر موضع
-    lastPosition = bot.entity.position.clone();
+    botData.lastPosition = bot.entity.position.clone();
 }
 
 
-// --- دوال الاتصال والتبديل ---
+// --- دوال الاتصال والتشغيل الجماعي (مُعدلة بالكامل) ---
 
-function createBot() {
-    const username = BOT_USERNAMES[currentBotIndex];
-    console.log(`--- Attempting to connect Bot #${currentBotIndex + 1}: ${username} ---`);
+function startBotRoutines(bot) {
+    console.log(`[${bot.username}] ✅ Bot spawned. Starting Advanced Routines.`);
+    
+    // 1. إعداد بيانات البوت
+    activeBots[bot.username].lastPosition = bot.entity.position.clone();
+
+    // 2. بدء روتين الحركة العشوائية (AFK)
+    randomAFKLoop(bot);
+    
+    // 3. بدء روتين البحث عن الوحوش والهجوم (يفحص كل 500ms)
+    activeBots[bot.username].combatInterval = setInterval(() => lookForMobsAndAttack(bot), 500); 
+
+    // 4. بدء روتين حركة الرأس (يفحص كل 500ms)
+    activeBots[bot.username].headLookInterval = setInterval(() => randomHeadLook(bot), 500);
+    
+    // 5. فحص التعليق (يفحص كل 5 ثوانٍ)
+    activeBots[bot.username].stuckCheckInterval = setInterval(() => stuckDetection(bot), 5000); 
+}
+
+function cleanupBot(username) {
+    const botData = activeBots[username];
+    if (botData) {
+        clearTimeout(botData.afkLoopTimeout);
+        clearTimeout(botData.stuckCheckTimeout);
+        clearInterval(botData.combatInterval);
+        clearInterval(botData.headLookInterval);
+        clearInterval(botData.stuckCheckInterval);
+        delete activeBots[username];
+        console.log(`[${username}] Cleaned up and removed from active list.`);
+    }
+}
+
+function createBot(username) {
+    console.log(`--- Attempting to connect Bot: ${username} ---`);
 
     const bot = mineflayer.createBot({
         host: SERVER_HOST,
@@ -173,63 +204,49 @@ function createBot() {
         hideErrors: true 
     });
 
-    currentBot = bot; 
+    // تهيئة كائن البيانات الخاص بهذا البوت
+    activeBots[username] = {
+        botInstance: bot,
+        afkLoopTimeout: null,
+        stuckCheckTimeout: null,
+        combatInterval: null,
+        headLookInterval: null,
+        stuckCheckInterval: null,
+        lastPosition: null,
+    };
 
     bot.on('login', () => {
-        console.log(`✅ Bot logged in as ${bot.username}`);
+        console.log(`[${bot.username}] ✅ Logged in.`);
     });
 
     bot.on('spawn', () => {
-        console.log('✅ Bot spawned. Starting Advanced Routines.');
-        
-        lastPosition = bot.entity.position.clone();
-
-        // 1. بدء روتين الحركة العشوائية (AFK)
-        randomAFKLoop(bot);
-        
-        // 2. بدء روتين البحث عن الوحوش والهجوم (يفحص كل 500ms للهجوم الفوري)
-        setInterval(() => lookForMobsAndAttack(bot), 500); 
-
-        // 3. بدء روتين حركة الرأس (يفحص كل 500ms)
-        setInterval(() => randomHeadLook(bot), 500);
-        
-        // 4. فحص التعليق (يفحص كل 5 ثوانٍ، والدالة الداخلية هي من يبدأ مؤقت الـ 30 ثانية)
-        setInterval(() => stuckDetection(bot), 5000); 
+        startBotRoutines(bot);
     });
     
-    // --- معالجة أخطاء إعادة الاتصال والتبديل ---
+    // --- معالجة أخطاء إعادة الاتصال (سيتم إعادة تشغيله بعد الفصل) ---
     
-    const switchBot = (reason) => {
-        if (currentBot) {
-            clearTimeout(afkLoopTimeout); 
-            if (stuckCheckInterval) clearTimeout(stuckCheckInterval); // مسح مؤقت التعليق
-            currentBot.end(); 
-            currentBot = null;
-        }
-        
-        currentBotIndex = (currentBotIndex + 1) % BOT_USERNAMES.length; 
-        
-        console.log(`🚨 Disconnected Reason: ${reason}. Switching to next bot in ${SWITCH_DELAY / 1000}s.`);
-        console.log(`---> Next Bot Index: #${currentBotIndex + 1} (${BOT_USERNAMES[currentBotIndex]}) <---`);
-
-        setTimeout(createBot, SWITCH_DELAY);
+    const reconnectBot = (reason) => {
+        console.log(`[${username}] 🚨 Disconnected Reason: ${reason}. Attempting to reconnect.`);
+        cleanupBot(username); // مسح المؤقتات وإزالة البوت القديم
+        setTimeout(() => createBot(username), 5000); // إعادة محاولة الاتصال بعد 5 ثوانٍ
     };
 
     bot.on('kicked', (reason) => {
         const kickMessage = (typeof reason === 'object' && reason.translate) ? reason.translate : String(reason);
-        switchBot(`Kicked! Reason: ${kickMessage}`);
+        reconnectBot(`Kicked! Reason: ${kickMessage}`);
     });
 
     bot.on('end', (reason) => {
-        switchBot(`Bot disconnected. Reason: ${reason}`);
+        reconnectBot(`Bot disconnected. Reason: ${reason}`);
     });
 
     bot.on('error', (err) => {
-        console.log(`🛑 Bot Error: ${err.message}`);
+        console.log(`[${username}] 🛑 Bot Error: ${err.message}`);
+        reconnectBot(`Error: ${err.message}`);
     });
-
-    return bot;
 }
 
-// بدء العملية بالبوت الأول
-createBot();
+// بدء العملية: تشغيل كل البوتات الـ 100 في وقت واحد
+BOT_USERNAMES.forEach(username => {
+    createBot(username);
+});
