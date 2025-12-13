@@ -2,35 +2,81 @@
 <html>
 <head>
     <title>Mineflayer Bot Control Panel</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .config-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1 { color: #333; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input[type="text"], input[type="number"] { width: 90%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 20px; }
+        button:hover { background-color: #0056b3; }
+        #status-list { list-style: none; padding: 0; }
+        #status-list li { padding: 5px 0; border-bottom: 1px dotted #eee; }
+        .active { color: green; }
+        .connecting { color: orange; }
+        .reconnecting { color: red; }
+    </style>
 </head>
 <body>
-    <h1>Bot Configuration</h1>
-    <label for="host">Host/IP:</label>
-    <input type="text" id="host" value="beginning-margaret.gl.joinmc.link"><br><br>
+    <div class="config-box">
+        <h1>إعدادات البوتات</h1>
+        <label for="host">Host/IP:</label>
+        <input type="text" id="host">
 
-    <label for="port">Port:</label>
-    <input type="number" id="port" value="4752"><br><br>
+        <label for="port">Port:</label>
+        <input type="number" id="port">
 
-    <label for="version">Minecraft Version:</label>
-    <input type="text" id="version" value="1.19.4"><br><br>
+        <label for="version">Minecraft Version (مثل 1.19.4):</label>
+        <input type="text" id="version">
 
-    <label for="count">Bot Count:</label>
-    <input type="number" id="count" value="100"><br><br>
+        <label for="count">Bot Count:</label>
+        <input type="number" id="count" min="1" max="100">
+        
+        <button onclick="startBots()">بدء / إعادة تشغيل البوتات</button>
+    </div>
     
-    <button onclick="startBots()">Start Bots</button>
-    <hr>
-    <h2>Bot Status</h2>
-    <pre id="status">Waiting for command...</pre>
-
+    <h2>حالة البوتات (100)</h2>
+    <ul id="status-list">
+        </ul>
+    
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
+        const statusList = document.getElementById('status-list');
+        const botStatus = {};
+
+        // تهيئة قائمة الحالة
+        for(let i = 1; i <= 100; i++) {
+            const username = `Anonymous${i}`;
+            botStatus[username] = 'Offline';
+            const li = document.createElement('li');
+            li.id = `status-${username}`;
+            li.innerHTML = `${username}: <span class="reconnecting">Offline</span>`;
+            statusList.appendChild(li);
+        }
 
         socket.on('currentSettings', (settings) => {
             document.getElementById('host').value = settings.host;
             document.getElementById('port').value = settings.port;
             document.getElementById('version').value = settings.version;
             document.getElementById('count').value = settings.botCount;
+        });
+        
+        socket.on('botStatus', (data) => {
+            const item = document.getElementById(`status-${data.username}`);
+            if (item) {
+                let statusClass = 'connecting';
+                if (data.status.includes('Active')) statusClass = 'active';
+                else if (data.status.includes('Reconnecting')) statusClass = 'reconnecting';
+                
+                item.innerHTML = `${data.username}: <span class="${statusClass}">${data.status}</span>`;
+                console.log(`[${data.username}] Status: ${data.status}`);
+            }
+        });
+        
+        socket.on('botChat', (data) => {
+            // يمكن عرض رسائل الشات هنا أو في نافذة سجل منفصلة
+            console.log(`[CHAT] ${data.username}: ${data.message}`);
         });
 
         function startBots() {
@@ -41,7 +87,7 @@
             
             const settings = { host, port, version, botCount };
             socket.emit('startBots', settings);
-            document.getElementById('status').innerText = 'Command sent. Check console for bot logs.';
+            alert('Command sent. Check server logs.');
         }
     </script>
 </body>
