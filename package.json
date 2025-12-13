@@ -1,7 +1,7 @@
 {
   "name": "mineflayer-smart-bot",
   "version": "1.0.0",
-  "description": "A smart Minecraft bot for gathering and combat.",
+  "description": "A smart Minecraft bot control server.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -10,7 +10,8 @@
     "mineflayer": "^4.10.0", 
     "mineflayer-pathfinder": "^2.1.1", 
     "mineflayer-pvp": "^1.2.0", 
-    "express": "^4.18.2", 
-    "socket.io": "^4.7.2"
+    "express": "^4.19.2", 
+    "socket.io": "^4.7.5",
+    "vec3": "^0.1.7"
   }
 }
