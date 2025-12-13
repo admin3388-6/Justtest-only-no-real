@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mineflayer Bot Control Panel</title>
+</head>
+<body>
+    <h1>Bot Configuration</h1>
+    <label for="host">Host/IP:</label>
+    <input type="text" id="host" value="beginning-margaret.gl.joinmc.link"><br><br>
+
+    <label for="port">Port:</label>
+    <input type="number" id="port" value="4752"><br><br>
+
+    <label for="version">Minecraft Version:</label>
+    <input type="text" id="version" value="1.19.4"><br><br>
+
+    <label for="count">Bot Count:</label>
+    <input type="number" id="count" value="100"><br><br>
+    
+    <button onclick="startBots()">Start Bots</button>
+    <hr>
+    <h2>Bot Status</h2>
+    <pre id="status">Waiting for command...</pre>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        socket.on('currentSettings', (settings) => {
+            document.getElementById('host').value = settings.host;
+            document.getElementById('port').value = settings.port;
+            document.getElementById('version').value = settings.version;
+            document.getElementById('count').value = settings.botCount;
+        });
+
+        function startBots() {
+            const host = document.getElementById('host').value;
+            const port = parseInt(document.getElementById('port').value);
+            const version = document.getElementById('version').value;
+            const botCount = parseInt(document.getElementById('count').value);
+            
+            const settings = { host, port, version, botCount };
+            socket.emit('startBots', settings);
+            document.getElementById('status').innerText = 'Command sent. Check console for bot logs.';
+        }
+    </script>
+</body>
+</html>
